@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = ["crates/shared/db",
     "crates/shared/domain",
 ]
 resolver = "3"

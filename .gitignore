@@ -1,0 +1,15 @@
+/target/
+**/*.rs.bk
+*.env
+.env
+
+# Postgres Data directory used by Timescale
+pgdata/
+
+# AI or IDE specific
+.gemini/
+.idea/
+.vscode/
+
+# Ignore ALL markdown files and context so they stay strictly local!
+*.md

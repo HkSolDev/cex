@@ -1,0 +1,18 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: cex-db
+
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: cex
+
+    ports:
+      - "5432:5432"
+
+    volumes: # FIXED: Indented 4 spaces to belong TO timescaledb
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
