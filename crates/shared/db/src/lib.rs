@@ -1,14 +1,30 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+pub async fn create_connection_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(database_url)
+        .await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env::var;
+    #[tokio::test]
+    async fn test_database_connection() {
+        dotenvy::dotenv().ok();
+        let database_url =
+            var("DATABASE_URL").expect("CRITICAL DATABASE_URL must be set in .env or system");
+        let pool = create_connection_pool(&database_url)
+            .await
+            .expect("failed to connect to DB");
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        let row: (i32,) = sqlx::query_as("SELECT 1")
+            .fetch_one(&pool)
+            .await
+            .expect("Failed to execute Select 1");
+        assert_eq!(row.0, 1);
+        println!("Database connection successful");
     }
 }
