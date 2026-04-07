@@ -231,6 +231,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "domain"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -243,6 +250,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "engine"
+version = "0.1.0"
+dependencies = [
+ "domain",
+ "tokio",
 ]
 
 [[package]]
@@ -1205,13 +1220,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
-]
-
-[[package]]
-name = "shared-domain"
-version = "0.1.0"
-dependencies = [
- "serde",
 ]
 
 [[package]]

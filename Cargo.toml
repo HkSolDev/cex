@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/shared/db",
+members = ["crates/engine","crates/shared/db",
     "crates/shared/domain",
 ]
 resolver = "3"
@@ -9,3 +9,6 @@ tokio = { version = "1.36", features = ["full"] }
 sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "postgres", "chrono", "macros"] }
 dotenvy = "0.15.7"
 serde = {version = "1.0", features = ["derive"]}
+domain= {path = "crates/shared/domain"}
+db= {path = "crates/shared/db"}
+engine= {path = "crates/engine"}

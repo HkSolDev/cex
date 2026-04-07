@@ -25,18 +25,18 @@ pub enum Side {
 pub enum OrderType {
     Market,
     Limit,
-    StopLimit
+    StopLimit,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)] 
-//Why we use the partialEq and clone is cloen we use as it share all across the project 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+//Why we use the partialEq and clone is cloen we use as it share all across the project
 pub enum OrderStatus {
     Pending,
     PartialFille,
     Fill,
-    Cancelled
+    Cancelled,
 }
 
-#[derive(Debug, Clone, PartialEq,Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Order {
     pub id: OrderId,
     pub user_id: UserId,
@@ -45,6 +45,7 @@ pub struct Order {
     pub order_type: OrderType,
     pub price: Price,
     pub qty: Qty,
+    pub filled_qty: Qty,
     pub timestamp: u64,
     pub status: OrderStatus,
 }
