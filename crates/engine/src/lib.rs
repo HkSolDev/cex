@@ -1,6 +1,7 @@
+pub mod orderbook;
 use domain::*;
 use tokio::sync::mpsc;
-use std::time::Duration;
+use tokio::time::Duration;
 
 #[derive(Clone)]
 pub struct OrderSender {
@@ -33,19 +34,18 @@ impl MatchingEngine {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-use domain::{Qty, Side};
+    use domain::{Qty, Side};
 
-use super::*;
+    use super::*;
 
-#[tokio::test]
-pub async fn test_order_intake_pipeline(){
-    let (mut engine, sender) = MatchingEngine::new(10);
+    #[tokio::test]
+    pub async fn test_order_intake_pipeline() {
+        let (mut engine, sender) = MatchingEngine::new(10);
 
-    let order = Order {
-    id: OrderId(1),
+        let order = Order {
+            id: OrderId(1),
             user_id: UserId(99),
             symbol: Symbol(*b"BTC-USDT"), // *b turns string into [u8; 8]
             side: Side::Buy,
@@ -55,11 +55,16 @@ pub async fn test_order_intake_pipeline(){
             filled_qty: Qty(0),
             timestamp: 12345,
             status: OrderStatus::Pending,
-    };
-    sender.send(order.clone()).await.expect("Failed to send order");
-    let receive_order =tokio::time::timeout(Duration::from_millis(100), engine.rx.recv()).await.expect("Engine timed out waiting for order! Pip is broken!").expect("Channel was closed unexpectedly");
-    assert_eq!(receive_order.id, order.id);
-    println!("Test Passed: Order successfully traveled through the pipeline to the Engine!");
+        };
+        sender
+            .send(order.clone())
+            .await
+            .expect("Failed to send order");
+        let receive_order = tokio::time::timeout(Duration::from_millis(100), engine.rx.recv())
+            .await
+            .expect("Engine timed out waiting for order! Pip is broken!")
+            .expect("Channel was closed unexpectedly");
+        assert_eq!(receive_order.id, order.id);
+        println!("Test Passed: Order successfully traveled through the pipeline to the Engine!");
+    }
 }
-}
-
