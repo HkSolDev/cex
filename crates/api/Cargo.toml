@@ -1,0 +1,14 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web= {workspace = true}
+serde = {workspace = true}
+domain = {workspace = true}
+engine = {workspace = true}
+db = {workspace = true}
+dotenvy = {workspace = true}
+sqlx = {workspace = true}
+

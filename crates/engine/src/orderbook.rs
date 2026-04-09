@@ -72,7 +72,7 @@ mod tests {
     use domain::{OrderId, OrderStatus, OrderType, Qty, Side, Symbol, UserId};
 
     // Helper function so we don't have to type this 100 times!
-    fn create_buy_order(id: u64, price: u64) -> Order {
+    fn create_buy_order(id: i64, price: i64) -> Order {
         Order {
             id: OrderId(id),
             user_id: UserId(99),
@@ -87,7 +87,7 @@ mod tests {
         }
     }
 
-    fn create_sell_order(id: u64, price: u64) -> Order {
+    fn create_sell_order(id: i64, price: i64) -> Order {
         Order {
             id: OrderId(id),
             user_id: UserId(99),

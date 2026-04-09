@@ -7,4 +7,4 @@ edition = "2024"
 tokio = { workspace= true}
 sqlx = {workspace = true} 
 dotenvy = "0.15.7"
-
+domain = {workspace = true}
