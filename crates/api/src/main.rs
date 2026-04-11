@@ -1,7 +1,8 @@
 use actix_web::{
-    App, HttpResponse, HttpServer, Responder, delete, error::ErrorInternalServerError, get, post, rt::task::yield_now, web
+    App, HttpResponse, HttpServer, Responder, delete, error::ErrorInternalServerError, get, post,
+    rt::task::yield_now, web,
 };
-use db::{create_connection_pool, delete_order, get_orders};
+use db::{create_connection_pool, delete_order, get_orders, lock_funds};
 use domain::{Order, OrderId, OrderStatus, OrderType, Price, Qty, Side, Symbol, UserId};
 use dotenvy;
 use serde::{Deserialize, Serialize};
@@ -43,14 +44,28 @@ async fn create_order(pool: web::Data<PgPool>, payload: web::Json<Order>) -> Htt
         timestamp: now(),
         status: OrderStatus::Pending,
     };
-
-    match db::create_order(pool.get_ref(), order).await {
-        //how to pass the orer in the order its
-        //say it pass it as a createOrderTequest is this the good way or i just take the data form
-        //teh paylod to pass it
-        Ok(_) => HttpResponse::Ok().json("Order is creates"),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    let cost = order.price.0 * order.qty.0;
+    let pool_ref = pool.get_ref();
+    // The Risk Check!
+    match db::lock_funds(pool_ref, payload.user_id.0, "USD", cost).await {
+        Ok(_) => {
+            // Safe! Go ahead and create the order.
+            match db::create_order(pool_ref, order).await {
+                Ok(_) => HttpResponse::Ok().json("Order created and funds locked!"),
+                Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+            }
+        }
+        Err(domain::DomainError::InsufficientFunds) => {
+            // Bouncer says no!
+            HttpResponse::BadRequest().body("Insufficient funds!")
+        }
+        Err(_) => {
+            // Database crash during the check
+            HttpResponse::InternalServerError().body("Risk check failed internally.")
+        }
     }
+
+
 }
 
 #[delete("/order/{id}")]
@@ -60,10 +75,10 @@ async fn delete_order_id(
 ) -> actix_web::Result<String> {
     let id = path.into_inner();
     let pool = pool.get_ref();
-   match delete_order(pool, id).await {
+    match delete_order(pool, id).await {
         Ok(_) => Ok(format!("Order deleted: {}", id)),
-        Err(e) => Err(actix_web::error::ErrorInternalServerError(e))
-   }
+        Err(e) => Err(actix_web::error::ErrorInternalServerError(e)),
+    }
 }
 
 #[actix_web::main]

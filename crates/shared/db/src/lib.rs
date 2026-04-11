@@ -1,6 +1,6 @@
+use domain::DomainError;
 use domain::{Order, OrderId, Price, Symbol, UserId};
 use sqlx::{PgPool, postgres::PgPoolOptions};
-
 pub async fn create_connection_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
     PgPoolOptions::new()
         .max_connections(5)
@@ -74,6 +74,49 @@ pub async fn get_orders(pool: &PgPool) -> Result<Vec<Order>, sqlx::Error> {
     )
     .fetch_all(pool)
     .await
+}
+
+// Use your custom Error enum here instead of &str if possible!
+pub async fn lock_funds(
+    pool: &PgPool,
+    user_id: i64,
+    asset: &str,
+    amount: i64,
+) -> Result<(), DomainError> {
+    // 1. Start the transaction
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| DomainError::DatabaseError(e))?;
+
+    // 2. Execute the query
+    let result = sqlx::query!(
+        r#"
+        UPDATE balances
+        SET locked = locked + $3,
+            free = free - $3  -- Use consistent column names
+        WHERE user_id = $1 
+          AND asset = $2 
+          AND free >= $3
+        "#,
+        user_id,
+        asset,
+        amount
+    )
+    .execute(&mut *tx) // Use the transaction, not the pool!
+    .await
+    .map_err(|e| DomainError::DatabaseError(e))?;
+
+    // 3. Check if any row was actually updated
+    if result.rows_affected() == 0 {
+        return Err(DomainError::InsufficientFunds);
+    }
+    // 4. Commit
+    tx.commit()
+        .await
+        .map_err(|e| DomainError::DatabaseError(e))?;
+
+    Ok(())
 }
 
 #[cfg(test)]

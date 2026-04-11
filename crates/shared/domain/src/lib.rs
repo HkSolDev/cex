@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Type};
+pub mod errors;
+pub use errors::DomainError;
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Type,
