@@ -260,6 +260,7 @@ dependencies = [
  "engine",
  "serde",
  "sqlx",
+ "tokio",
 ]
 
 [[package]]

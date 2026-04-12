@@ -46,18 +46,117 @@ impl OrderBook {
         }
     }
 
-    // pub fn match_order(&mut self, incoming_sell_order: Order) {
-    //     let mut incoming_sell_order = incoming_sell_order;
-    //     let bids = &mut self.bids;
-    //     while let Some((price, line_of_orders)) = bids.iter_mut().last() {
-    //         if *price >= incoming_sell_order.price {
-    //             if let Some(best_bid) = line_of_orders.pop_front() {
-    //                 &self.bids;
-    //             }
-    //         }
-    //     }
-    // }
-    pub fn best_ask_price(&mut self) -> Option<&Price> {
+    pub fn match_order(&mut self, incoming_order: Order) {
+        let mut incoming_order = incoming_order;
+
+        loop {
+            // Did we fill our whole order already? If so, stop!
+            if incoming_order.qty.0 == incoming_order.filled_qty.0 {
+                break;
+            }
+
+            if incoming_order.side == domain::Side::Sell {
+                let best_bids = self.bids.last_entry();
+
+                match best_bids {
+                    Some(mut entry) => {
+                        let best_price = entry.key();
+
+                        if best_price >= &incoming_order.price {
+                            let line = entry.get_mut();
+                            if let Some(mut counterparty) = line.pop_front() {
+                                println!(
+                                    "MATCHED Sell {:?} against Buy {:?}",
+                                    incoming_order.id, counterparty.id
+                                );
+
+                                // 1. Calculate how much each person needs
+                                let incoming_remaining =
+                                    incoming_order.qty.0 - incoming_order.filled_qty.0;
+                                let counterparty_remaining =
+                                    counterparty.qty.0 - counterparty.filled_qty.0;
+
+                                // 2. Take the smaller number
+                                let trade_qty =
+                                    std::cmp::min(incoming_remaining, counterparty_remaining);
+
+                                // 3. Update their baskets
+                                incoming_order.filled_qty.0 += trade_qty;
+                                counterparty.filled_qty.0 += trade_qty;
+
+                                // 4. If Bob (the counterparty) still wants more, put him back in front of the line!
+                                if counterparty.qty.0 > counterparty.filled_qty.0 {
+                                    line.push_front(counterparty);
+                                }
+                            }
+
+                            // If the line is empty now, remove the price level!
+                            if line.is_empty() {
+                                entry.remove();
+                            }
+                        } else {
+                            // The best price is too low, nobody wants it.
+                            break;
+                        }
+                    }
+                    None => {
+                        // No buyers left on the whole exchange!
+                        break;
+                    }
+                }
+            } else if incoming_order.side == domain::Side::Buy {
+                let best_asks = self.asks.first_entry();
+
+                match best_asks {
+                    Some(mut entry) => {
+                        let best_price = entry.key();
+
+                        if best_price <= &incoming_order.price {
+                            let line = entry.get_mut();
+                            if let Some(mut counterparty) = line.pop_front() {
+                                println!(
+                                    "MATCHED Buy {:?} against Sell {:?}",
+                                    incoming_order.id, counterparty.id
+                                );
+
+                                let incoming_remaining =
+                                    incoming_order.qty.0 - incoming_order.filled_qty.0;
+                                let counterparty_remaining =
+                                    counterparty.qty.0 - counterparty.filled_qty.0;
+
+                                let trade_qty =
+                                    std::cmp::min(incoming_remaining, counterparty_remaining);
+
+                                incoming_order.filled_qty.0 += trade_qty;
+                                counterparty.filled_qty.0 += trade_qty;
+
+                                if counterparty.qty.0 > counterparty.filled_qty.0 {
+                                    line.push_front(counterparty);
+                                }
+                            }
+
+                            if line.is_empty() {
+                                entry.remove();
+                            }
+                        } else {
+                            // The best price is too high, nobody wants it.
+                            break;
+                        }
+                    }
+                    None => {
+                        // No sellers left on the whole exchange!
+                        break;
+                    }
+                }
+            }
+        } // End of loop
+
+        // Outside the loop: Add the leftover parts to the book
+        if incoming_order.qty.0 > incoming_order.filled_qty.0 {
+            self.add_order(incoming_order);
+        }
+    }
+    pub fn best_ask_price(&self) -> Option<&Price> {
         self.asks.first_key_value().map(|(price, _)| price)
     }
 
@@ -147,6 +246,6 @@ mod tests {
 
         book.cancel_order(create_buy_order(2, 51_000));
 
-        assert_eq!(book.bids.get(&Price(51_000)).unwrap().len(), 1); 
+        assert_eq!(book.bids.get(&Price(51_000)).unwrap().len(), 1);
     }
 }

@@ -12,3 +12,4 @@ db = {workspace = true}
 dotenvy = {workspace = true}
 sqlx = {workspace = true}
 
+tokio = {workspace = true}

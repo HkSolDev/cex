@@ -5,10 +5,12 @@ use actix_web::{
 use db::{create_connection_pool, delete_order, get_orders, lock_funds};
 use domain::{Order, OrderId, OrderStatus, OrderType, Price, Qty, Side, Symbol, UserId};
 use dotenvy;
+use engine::orderbook::OrderBook;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::time::{SystemTime, UNIX_EPOCH}; //do not know why its use
-//
+use tokio::{net::unix::pipe::Sender, sync::mpsc};
+
 fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -30,7 +32,11 @@ async fn get_orders_handler(pool: web::Data<PgPool>) -> HttpResponse {
 }
 
 #[post("/orders")]
-async fn create_order(pool: web::Data<PgPool>, payload: web::Json<Order>) -> HttpResponse {
+async fn create_order(
+    pool: web::Data<PgPool>,
+    sender: web::Data<mpsc::Sender<Order>>,
+    payload: web::Json<Order>,
+) -> HttpResponse {
     println!("Order created: {:?}", payload);
     let order = Order {
         id: payload.id,
@@ -46,12 +52,18 @@ async fn create_order(pool: web::Data<PgPool>, payload: web::Json<Order>) -> Htt
     };
     let cost = order.price.0 * order.qty.0;
     let pool_ref = pool.get_ref();
+    let sender = sender.get_ref();
     // The Risk Check!
     match db::lock_funds(pool_ref, payload.user_id.0, "USD", cost).await {
         Ok(_) => {
             // Safe! Go ahead and create the order.
-            match db::create_order(pool_ref, order).await {
-                Ok(_) => HttpResponse::Ok().json("Order created and funds locked!"),
+            match db::create_order(pool_ref, order.clone()).await {
+                Ok(_) => {
+                    if let Err(e) = sender.send(order.clone()).await {
+                        println!("Failed to send to Engine: {}", e);
+                    }
+                    HttpResponse::Ok().json("Order created and funds locked!")
+                }
                 Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
             }
         }
@@ -64,8 +76,6 @@ async fn create_order(pool: web::Data<PgPool>, payload: web::Json<Order>) -> Htt
             HttpResponse::InternalServerError().body("Risk check failed internally.")
         }
     }
-
-
 }
 
 #[delete("/order/{id}")]
@@ -85,13 +95,39 @@ async fn delete_order_id(
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
     let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+
     let db_pool = create_connection_pool(&url)
         .await
         .expect("Failed to create connection pool");
     let data = web::Data::new(db_pool);
+
+    //Create the channel to store 10000 orders
+    let (tx, mut rx) = mpsc::channel::<Order>(10000);
+
+    tokio::spawn(async move {
+        println!("Matching Engine Started!");
+
+        let mut orderbook = OrderBook::new();
+
+        while let Some(order) = rx.recv().await {
+            // Process the order
+            println!("Received order: {:?}", order);
+            // Add your order matching logic here
+            orderbook.match_order(order);
+            // 3. Print the Best Bid/Ask so you can see the market moving!
+            println!(
+                "Current Market -> Bid: {:?} | Ask: {:?}",
+                orderbook.best_bid_price(),
+                orderbook.best_ask_price()
+            );
+        }
+    });
+    let sender_data = web::Data::new(tx);
+
     HttpServer::new(move || {
         App::new()
             .app_data(data.clone())
+            .app_data(sender_data.clone()) // clone the sender data so each thread have axess to that
             .service(health_checker)
             .service(create_order)
             .service(get_orders_handler)
