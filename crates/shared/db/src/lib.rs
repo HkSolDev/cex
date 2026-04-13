@@ -119,7 +119,79 @@ pub async fn lock_funds(
     Ok(())
 }
 
+/// Called by the Matching Engine after a trade is confirmed.
+/// Atomically transfers assets between the maker and taker using a single SQL transaction.
+/// maker = the person whose order was already sitting in the book (e.g., Alice selling BTC)
+/// taker = the person who just arrived and triggered the match (e.g., Bob buying BTC)
+pub async fn settle_trade(
+    pool: &PgPool,
+    maker_user_id: i64, // Alice
+    taker_user_id: i64, // Bob
+    base_asset: &str,   // "BTC" — the thing being bought/sold
+    quote_asset: &str,  // "USD" — the currency used to pay
+    base_qty: i64,      // how much BTC was traded
+    quote_qty: i64,     // how much USD was traded (price * qty)
+) -> Result<(), DomainError> {
+    // ATOMICITY: start the transaction
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| DomainError::DatabaseError(e))?;
+
+    // 1. Alice gave away her BTC → subtract from her locked balance
+    sqlx::query!(
+        "UPDATE balances SET locked = locked - $1 WHERE user_id = $2 AND asset = $3",
+        base_qty,
+        maker_user_id,
+        base_asset
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| DomainError::DatabaseError(e))?;
+
+    // 2. Alice gets paid in USD → add to her free balance
+    sqlx::query!(
+        "UPDATE balances SET free = free + $1 WHERE user_id = $2 AND asset = $3",
+        quote_qty,
+        maker_user_id,
+        quote_asset
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| DomainError::DatabaseError(e))?;
+
+    // 3. Bob spent his USD → subtract from his locked balance
+    sqlx::query!(
+        "UPDATE balances SET locked = locked - $1 WHERE user_id = $2 AND asset = $3",
+        quote_qty,
+        taker_user_id,
+        quote_asset
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| DomainError::DatabaseError(e))?;
+
+    // 4. Bob gets his BTC → add to his free balance
+    sqlx::query!(
+        "UPDATE balances SET free = free + $1 WHERE user_id = $2 AND asset = $3",
+        base_qty,
+        taker_user_id,
+        base_asset
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| DomainError::DatabaseError(e))?;
+
+    // DURABILITY: all 4 queries passed — commit permanently to disk!
+    tx.commit()
+        .await
+        .map_err(|e| DomainError::DatabaseError(e))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
+
 mod tests {
     use super::*;
     use std::env::var;

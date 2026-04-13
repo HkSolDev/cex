@@ -1,5 +1,7 @@
-use domain::{Order, Price};
+use db::settle_trade;
+use domain::{Order, Price, Trade};
 use std::collections::{BTreeMap, VecDeque};
+use tokio::sync::mpsc;
 
 // An OrderBook tracks two separate lists: People buying, and people selling.
 pub struct OrderBook {
@@ -8,13 +10,15 @@ pub struct OrderBook {
     // Value = A line (VecDeque) of Orders sitting at that exact price!
     pub bids: BTreeMap<Price, VecDeque<Order>>, // Buy orders
     pub asks: BTreeMap<Price, VecDeque<Order>>, // Sell orders
+    pub trade_sender: mpsc::Sender<Trade>,      //The start of second belt
 }
 
 impl OrderBook {
-    pub fn new() -> Self {
+    pub fn new(trade_sender: mpsc::Sender<Trade>) -> Self {
         Self {
             bids: BTreeMap::new(),
             asks: BTreeMap::new(),
+            trade_sender,
         }
     }
 
@@ -62,6 +66,7 @@ impl OrderBook {
                     Some(mut entry) => {
                         let best_price = entry.key();
 
+                        let match_price = best_price.0;
                         if best_price >= &incoming_order.price {
                             let line = entry.get_mut();
                             if let Some(mut counterparty) = line.pop_front() {
@@ -69,6 +74,8 @@ impl OrderBook {
                                     "MATCHED Sell {:?} against Buy {:?}",
                                     incoming_order.id, counterparty.id
                                 );
+
+                                //exp[ect here do
 
                                 // 1. Calculate how much each person needs
                                 let incoming_remaining =
@@ -83,6 +90,14 @@ impl OrderBook {
                                 // 3. Update their baskets
                                 incoming_order.filled_qty.0 += trade_qty;
                                 counterparty.filled_qty.0 += trade_qty;
+                                let trade = Trade {
+                                    maker_user_id: counterparty.user_id.0,
+                                    taker_user_id: incoming_order.user_id.0,
+                                    symbol: incoming_order.symbol.0,
+                                    price: match_price,
+                                    qty: trade_qty,
+                                };
+                                self.trade_sender.try_send(trade).expect("Failed to send"); //waht
 
                                 // 4. If Bob (the counterparty) still wants more, put him back in front of the line!
                                 if counterparty.qty.0 > counterparty.filled_qty.0 {
@@ -110,6 +125,7 @@ impl OrderBook {
                 match best_asks {
                     Some(mut entry) => {
                         let best_price = entry.key();
+                        let match_price = best_price.0;
 
                         if best_price <= &incoming_order.price {
                             let line = entry.get_mut();
@@ -126,6 +142,15 @@ impl OrderBook {
 
                                 let trade_qty =
                                     std::cmp::min(incoming_remaining, counterparty_remaining);
+
+                                let trade = Trade {
+                                    maker_user_id: counterparty.user_id.0,
+                                    taker_user_id: incoming_order.user_id.0,
+                                    symbol: incoming_order.symbol.0,
+                                    price: match_price,
+                                    qty: trade_qty,
+                                };
+                                self.trade_sender.try_send(trade).expect("Failed to send"); //waht
 
                                 incoming_order.filled_qty.0 += trade_qty;
                                 counterparty.filled_qty.0 += trade_qty;

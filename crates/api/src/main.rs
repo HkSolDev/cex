@@ -2,8 +2,8 @@ use actix_web::{
     App, HttpResponse, HttpServer, Responder, delete, error::ErrorInternalServerError, get, post,
     rt::task::yield_now, web,
 };
-use db::{create_connection_pool, delete_order, get_orders, lock_funds};
-use domain::{Order, OrderId, OrderStatus, OrderType, Price, Qty, Side, Symbol, UserId};
+use db::{create_connection_pool, delete_order, get_orders, lock_funds, settle_trade};
+use domain::{Order, OrderId, OrderStatus, OrderType, Price, Qty, Side, Symbol, Trade, UserId};
 use dotenvy;
 use engine::orderbook::OrderBook;
 use serde::{Deserialize, Serialize};
@@ -53,8 +53,19 @@ async fn create_order(
     let cost = order.price.0 * order.qty.0;
     let pool_ref = pool.get_ref();
     let sender = sender.get_ref();
+
+    // 1. Decide what to pull out of the wallet based on the side!
+    let asset_to_lock = match order.side {
+        domain::Side::Buy => "USD",
+        domain::Side::Sell => "BTC",
+    };
+
+    let amount_to_lock = match order.side {
+        domain::Side::Buy => cost,         // Buyers lock total cash
+        domain::Side::Sell => order.qty.0, // Sellers lock pure apples
+    };
     // The Risk Check!
-    match db::lock_funds(pool_ref, payload.user_id.0, "USD", cost).await {
+    match db::lock_funds(pool_ref, payload.user_id.0, asset_to_lock, amount_to_lock).await {
         Ok(_) => {
             // Safe! Go ahead and create the order.
             match db::create_order(pool_ref, order.clone()).await {
@@ -99,15 +110,16 @@ async fn main() -> std::io::Result<()> {
     let db_pool = create_connection_pool(&url)
         .await
         .expect("Failed to create connection pool");
-    let data = web::Data::new(db_pool);
+    let data = web::Data::new(db_pool.clone());
 
     //Create the channel to store 10000 orders
     let (tx, mut rx) = mpsc::channel::<Order>(10000);
-
+    //Create the channel to store trades
+    let (trade_tx, mut trade_rx) = mpsc::channel::<Trade>(10000);
     tokio::spawn(async move {
         println!("Matching Engine Started!");
 
-        let mut orderbook = OrderBook::new();
+        let mut orderbook = OrderBook::new(trade_tx);
 
         while let Some(order) = rx.recv().await {
             // Process the order
@@ -123,6 +135,36 @@ async fn main() -> std::io::Result<()> {
         }
     });
     let sender_data = web::Data::new(tx);
+    // 1. Give the Cashier their own set of keys to the DB!
+    let db_pool_for_cashier = db_pool.clone();
+    // 2. Start the Cashier Thread!
+    tokio::spawn(async move {
+        println!("💳 Cashier (Settlement) Engine Started!");
+
+        // 3. Stand at the end of the Trade Belt and wait for burgers!
+        while let Some(trade) = trade_rx.recv().await {
+            println!("Cashier received trade: {:?}", trade);
+
+            // 4. Calculate the total cash value (10 apples * $50,000 = $500,000)
+            let total_usd_value = trade.qty * trade.price;
+            // 5. Run the ACID transaction!
+            // We will hardcode "BTC" and "USD" just for the MVP.
+            let settlement_result = settle_trade(
+                &db_pool_for_cashier,
+                trade.maker_user_id,
+                trade.taker_user_id,
+                "BTC",
+                "USD",
+                trade.qty,
+                total_usd_value,
+            )
+            .await;
+            match settlement_result {
+                Ok(_) => println!("✅ Trade perfectly settled in Postgres!"),
+                Err(e) => println!("❌ FATAL DATABASE ERROR: {:?}", e),
+            }
+        }
+    });
 
     HttpServer::new(move || {
         App::new()

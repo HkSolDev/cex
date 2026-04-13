@@ -55,6 +55,16 @@ pub enum OrderStatus {
     Filled,
     Cancelled,
 }
+
+#[derive(Debug,Clone)]
+pub struct Trade{
+    pub maker_user_id: i64,
+    pub taker_user_id: i64,
+    pub symbol: [u8;8],
+    pub price: i64,
+    pub qty: i64
+}
+
 impl From<i64> for OrderId {
     fn from(v: i64) -> Self {
         Self(v)
