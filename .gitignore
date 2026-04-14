@@ -11,5 +11,10 @@ pgdata/
 .idea/
 .vscode/
 
-# Ignore ALL markdown files and context so they stay strictly local!
-*.md
+# Keep session notes and AI context strictly local — never commit these!
+STATE.md
+context.md
+SKILL.md
+# Allow README.md files to be committed
+!README.md
+!**/README.md
