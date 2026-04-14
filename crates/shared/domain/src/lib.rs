@@ -63,6 +63,7 @@ pub struct Trade {
     pub symbol: [u8; 8],
     pub price: i64,
     pub qty: i64,
+    pub timestamp: i64,
 }
 
 impl From<i64> for OrderId {

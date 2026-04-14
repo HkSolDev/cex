@@ -47,6 +47,7 @@ impl MatchingEngine {
                 symbol: *b"BTC-USDT",
                 price: 65000_00, // 65,000 USD
                 qty: 5,
+                timestamp: 1234567890,
             };
 
             // Now shout it out of the megaphone!

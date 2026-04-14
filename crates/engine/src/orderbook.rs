@@ -96,6 +96,7 @@ impl OrderBook {
                                     symbol: incoming_order.symbol.0,
                                     price: match_price,
                                     qty: trade_qty,
+                                    timestamp: incoming_order.timestamp,
                                 };
                                 self.trade_sender.try_send(trade).expect("Failed to send"); //waht
 
@@ -149,6 +150,7 @@ impl OrderBook {
                                     symbol: incoming_order.symbol.0,
                                     price: match_price,
                                     qty: trade_qty,
+                                    timestamp: incoming_order.timestamp,
                                 };
                                 self.trade_sender.try_send(trade).expect("Failed to send"); //waht
 
