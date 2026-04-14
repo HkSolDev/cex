@@ -56,13 +56,13 @@ pub enum OrderStatus {
     Cancelled,
 }
 
-#[derive(Debug,Clone)]
-pub struct Trade{
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Trade {
     pub maker_user_id: i64,
     pub taker_user_id: i64,
-    pub symbol: [u8;8],
+    pub symbol: [u8; 8],
     pub price: i64,
-    pub qty: i64
+    pub qty: i64,
 }
 
 impl From<i64> for OrderId {
@@ -123,6 +123,48 @@ impl Order {
         self.qty == self.filled_qty
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Candle {
+    pub symbol: [u8; 8],
+    pub interval_start: i64, // The Unix timestamp exactly at the start of the minute
+    pub open: i64,
+    pub high: i64,
+    pub low: i64,
+    pub close: i64,
+    pub volume: i64,
+    // VWAP math:
+    pub total_quote_qty: i64, // Sum of (price * qty)
+}
+
+impl Candle {
+    pub fn new(trade: &Trade, interval_start: i64) -> Self {
+        Self {
+            symbol: trade.symbol,
+            interval_start,
+            open: trade.price,
+            high: trade.price,
+            low: trade.price,
+            close: trade.price,
+            volume: trade.qty,
+            total_quote_qty: trade.price * trade.qty,
+        }
+    }
+
+    pub fn update(&mut self, trade: &Trade) {
+        self.high = self.high.max(trade.price);
+        self.low = self.low.min(trade.price);
+        self.close = trade.price; // The latest trade is always the new Close
+        self.volume += trade.qty;
+        self.total_quote_qty += trade.price * trade.qty;
+    }
+    
+    // Volume Weighted Average Price = Total Money Exchanged / Total Amount of Asset
+    pub fn vwap(&self) -> i64 {
+        self.total_quote_qty / self.volume
+    }
+}
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppError {

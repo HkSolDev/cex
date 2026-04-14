@@ -1,6 +1,6 @@
 [workspace]
-members = [ "crates/api","crates/engine","crates/shared/db",
-    "crates/shared/domain",
+members = [ "crates/api","crates/engine", "crates/market_data","crates/shared/db",
+    "crates/shared/domain", "crates/market_data",
 ]
 resolver = "3"
 

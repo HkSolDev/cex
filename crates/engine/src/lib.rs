@@ -1,7 +1,7 @@
 pub mod orderbook;
 use domain::*;
-use std::time::Duration;
-use tokio::sync::mpsc;
+
+use tokio::sync::{broadcast, mpsc};
 
 #[derive(Clone)]
 pub struct OrderSender {
@@ -16,12 +16,24 @@ impl OrderSender {
 
 pub struct MatchingEngine {
     rx: mpsc::Receiver<Order>,
+    trade_tx: broadcast::Sender<Trade>,
 }
 impl MatchingEngine {
     //Did not understand what this will do
-    pub fn new(buffer_size: usize) -> (Self, OrderSender) {
+    pub fn new(buffer_size: usize) -> (Self, OrderSender, broadcast::Sender<Trade>) {
         let (tx, rx) = mpsc::channel(buffer_size);
-        (MatchingEngine { rx }, OrderSender { tx })
+        //To broadcast the trade to db websocket
+        let (trade_tx, _) = broadcast::channel(1000);
+        // Process the order here
+
+        (
+            MatchingEngine {
+                rx,
+                trade_tx: trade_tx.clone(),
+            },
+            OrderSender { tx },
+            trade_tx,
+        )
     }
 
     pub async fn run(mut self) {
@@ -29,7 +41,17 @@ impl MatchingEngine {
 
         while let Some(order) = self.rx.recv().await {
             println!("Received order: {:?}", order);
-            // Process the order here
+            let dummy_trade = Trade {
+                maker_user_id: 101, // Some random guy waiting in the orderbook
+                taker_user_id: 0,   // The person who just sent the aggressive order
+                symbol: *b"BTC-USDT",
+                price: 65000_00, // 65,000 USD
+                qty: 5,
+            };
+
+            // Now shout it out of the megaphone!
+            // We use .ok() to silently ignore the error if no one is listening right now.
+            self.trade_tx.send(dummy_trade).ok();
         }
     }
 }
@@ -37,12 +59,14 @@ impl MatchingEngine {
 #[cfg(test)]
 mod tests {
     use domain::{Qty, Side};
+    use std::time::Duration;
 
     use super::*;
 
+
     #[tokio::test]
     pub async fn test_order_intake_pipeline() {
-        let (mut engine, sender) = MatchingEngine::new(10);
+        let (mut engine, sender, _trade_tx) = MatchingEngine::new(10);
 
         let order = Order {
             id: OrderId(1),

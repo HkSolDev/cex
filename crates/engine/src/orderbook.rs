@@ -1,4 +1,4 @@
-use db::settle_trade;
+
 use domain::{Order, Price, Trade};
 use std::collections::{BTreeMap, VecDeque};
 use tokio::sync::mpsc;
@@ -228,7 +228,9 @@ mod tests {
 
     #[test]
     fn test_orderbook_sorting() {
-        let mut book = OrderBook::new();
+        let (tx, _rx) = tokio::sync::mpsc::channel(100);
+
+        let mut book = OrderBook::new(tx);
 
         // We add orders OUT OF ORDER maliciously!
         book.add_order(create_buy_order(1, 50_000)); // Alice buys at 50k
@@ -250,7 +252,9 @@ mod tests {
 
     #[test]
     fn test_best_bid_ask() {
-        let mut book = OrderBook::new();
+        let (tx, _rx) = tokio::sync::mpsc::channel(100);
+
+        let mut book = OrderBook::new(tx);
 
         book.add_order(create_buy_order(1, 50_000));
         book.add_order(create_buy_order(2, 51_000));
@@ -264,7 +268,9 @@ mod tests {
 
     #[test]
     fn test_cancel_order() {
-        let mut book = OrderBook::new();
+        let (tx, _rx) = tokio::sync::mpsc::channel(100);
+
+        let mut book = OrderBook::new(tx);
         book.add_order(create_buy_order(1, 50_000));
         book.add_order(create_buy_order(2, 51_000));
         book.add_order(create_buy_order(3, 51_000));
