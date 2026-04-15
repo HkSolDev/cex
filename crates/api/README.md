@@ -2,6 +2,42 @@
 
 **One job: Accept HTTP requests from clients, validate them, and route them to the right internal system.**
 
+
+## Test
+
+#### Place a sell order (to create a matching price level):
+```bash
+curl -X POST http://localhost:8080/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": 1,
+    "user_id": 101,
+    "symbol": [66, 67, 84, 45, 85, 83, 68, 84],
+    "side": "sell",
+    "order_type": "limit",
+    "price": 50000,
+    "qty": 10,
+    "filled_qty": 0,
+    "timestamp": 12345,
+    "status": "pending"
+  }'
+
+#### Place a matching buy order:
+curl -X POST http://localhost:8080/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": 2,
+    "user_id": 102,
+    "symbol": [66, 67, 84, 45, 85, 83, 68, 84],
+    "side": "buy",
+    "order_type": "limit",
+    "price": 50000,
+    "qty": 10,
+    "filled_qty": 0,
+    "timestamp": 12345,
+    "status": "pending"
+  }'
+
 ---
 
 ## 🤔 Why Does This Crate Exist?

@@ -1,7 +1,7 @@
 
 use domain::{Order, Price, Trade};
 use std::collections::{BTreeMap, VecDeque};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 
 // An OrderBook tracks two separate lists: People buying, and people selling.
 pub struct OrderBook {
@@ -10,11 +10,11 @@ pub struct OrderBook {
     // Value = A line (VecDeque) of Orders sitting at that exact price!
     pub bids: BTreeMap<Price, VecDeque<Order>>, // Buy orders
     pub asks: BTreeMap<Price, VecDeque<Order>>, // Sell orders
-    pub trade_sender: mpsc::Sender<Trade>,      //The start of second belt
+    pub trade_sender: broadcast::Sender<Trade>,      //The start of second belt
 }
 
 impl OrderBook {
-    pub fn new(trade_sender: mpsc::Sender<Trade>) -> Self {
+    pub fn new(trade_sender: broadcast::Sender<Trade>) -> Self {
         Self {
             bids: BTreeMap::new(),
             asks: BTreeMap::new(),
@@ -98,8 +98,9 @@ impl OrderBook {
                                     qty: trade_qty,
                                     timestamp: incoming_order.timestamp,
                                 };
-                                self.trade_sender.try_send(trade).expect("Failed to send"); //waht
+                                self.trade_sender.send(trade).ok(); 
 
+                                
                                 // 4. If Bob (the counterparty) still wants more, put him back in front of the line!
                                 if counterparty.qty.0 > counterparty.filled_qty.0 {
                                     line.push_front(counterparty);
@@ -152,7 +153,7 @@ impl OrderBook {
                                     qty: trade_qty,
                                     timestamp: incoming_order.timestamp,
                                 };
-                                self.trade_sender.try_send(trade).expect("Failed to send"); //waht
+                                self.trade_sender.send(trade).ok(); //waht
 
                                 incoming_order.filled_qty.0 += trade_qty;
                                 counterparty.filled_qty.0 += trade_qty;
@@ -254,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_best_bid_ask() {
-        let (tx, _rx) = tokio::sync::mpsc::channel(100);
+        let (tx, _rx) = tokio::sync::broadcast::channel(100);
 
         let mut book = OrderBook::new(tx);
 
@@ -270,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_cancel_order() {
-        let (tx, _rx) = tokio::sync::mpsc::channel(100);
+        let (tx, _rx) = tokio::sync::broadcast::channel(100);
 
         let mut book = OrderBook::new(tx);
         book.add_order(create_buy_order(1, 50_000));

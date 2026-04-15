@@ -118,18 +118,32 @@ async fn main() -> std::io::Result<()> {
 
     //Create the channel to store 10000 orders
     let (tx, mut rx) = mpsc::channel::<Order>(10000);
-    //Create the channel to store trades
-    let (trade_tx, _) = mpsc::channel::<Trade>(1000);
+    //Create the broadcast channel for trades - the "megaphone"!
+    let (trade_tx, _) = broadcast::channel::<Trade>(1000);
+
+    // FIX: Clone trade_tx BEFORE moving it into the closure!
+    // We need separate clones for: OrderBook, Cashier, and CandleEngine
+    let trade_tx_for_engine = trade_tx.clone();
+
     tokio::spawn(async move {
         println!("Matching Engine Started!");
 
-        let mut orderbook = OrderBook::new(trade_tx);
+        let mut orderbook = OrderBook::new(trade_tx_for_engine);
 
         while let Some(order) = rx.recv().await {
             // Process the order
             println!("Received order: {:?}", order);
             // Add your order matching logic here
             orderbook.match_order(order);
+
+               
+           
+        //    match trade {
+            //Ok(trade) =>  
+           
+        //     (_) => println!("Error in receiveing the trade form the channel orderbook to matchingEngine"),
+        //    }
+          
             // 3. Print the Best Bid/Ask so you can see the market moving!
             println!(
                 "Current Market -> Bid: {:?} | Ask: {:?}",
@@ -143,19 +157,17 @@ async fn main() -> std::io::Result<()> {
     // 1. Give the Cashier their own set of keys to the DB!
     let db_pool_for_cashier = db_pool.clone();
 
-    // 1. Create broadcast channel for trades
-    let (trade_tx, _) = broadcast::channel::<Trade>(10000);
-
+    
     // 2. Each consumer subscribes
-    let mut cashier_rx = trade_tx.subscribe(); //why it need let mut cashier_rx = trade_tx.subscribe();
+    let mut cashier_rx = trade_tx.clone().subscribe(); //why it need let mut cashier_rx = trade_tx.subscribe();
 
     // what this will do
-    let candle_rx = trade_tx.subscribe();
+    let candle_rx = trade_tx.clone().subscribe();
 
     // 3. Cashier
     tokio::spawn(async move {
         loop {
-            match cashier_rx.recv().await {
+            match cashier_rx.recv().await { //here we receive the trade
                 Ok(trade) => {
                     println!("the trade come in the candle_engine {:?}", trade)
                 }
