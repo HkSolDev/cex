@@ -258,6 +258,7 @@ dependencies = [
  "domain",
  "dotenvy",
  "engine",
+ "market_data",
  "serde",
  "sqlx",
  "tokio",

@@ -14,4 +14,5 @@ thiserror="1.0"
 domain= {path = "crates/shared/domain"}
 db= {path = "crates/shared/db"}
 engine= {path = "crates/engine"}
+market_data = {path = "crates/market_data"}
 api = {path = "crates/api"}

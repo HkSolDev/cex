@@ -5,11 +5,15 @@ use actix_web::{
 use db::{create_connection_pool, delete_order, get_orders, lock_funds, settle_trade};
 use domain::{Order, OrderId, OrderStatus, OrderType, Price, Qty, Side, Symbol, Trade, UserId};
 use dotenvy;
-use engine::orderbook::OrderBook;
+use engine::{MatchingEngine, orderbook::OrderBook};
+use market_data::CandleEngine;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::time::{SystemTime, UNIX_EPOCH}; //do not know why its use
-use tokio::{net::unix::pipe::Sender, sync::mpsc};
+use tokio::{
+    net::unix::pipe::Sender,
+    sync::{broadcast, mpsc},
+};
 
 fn now() -> i64 {
     SystemTime::now()
@@ -115,7 +119,7 @@ async fn main() -> std::io::Result<()> {
     //Create the channel to store 10000 orders
     let (tx, mut rx) = mpsc::channel::<Order>(10000);
     //Create the channel to store trades
-    let (trade_tx, mut trade_rx) = mpsc::channel::<Trade>(10000);
+    let (trade_tx, _) = mpsc::channel::<Trade>(1000);
     tokio::spawn(async move {
         println!("Matching Engine Started!");
 
@@ -134,38 +138,40 @@ async fn main() -> std::io::Result<()> {
             );
         }
     });
+
     let sender_data = web::Data::new(tx);
     // 1. Give the Cashier their own set of keys to the DB!
     let db_pool_for_cashier = db_pool.clone();
-    // 2. Start the Cashier Thread!
+
+    // 1. Create broadcast channel for trades
+    let (trade_tx, _) = broadcast::channel::<Trade>(10000);
+
+    // 2. Each consumer subscribes
+    let mut cashier_rx = trade_tx.subscribe(); //why it need let mut cashier_rx = trade_tx.subscribe();
+
+    // what this will do
+    let candle_rx = trade_tx.subscribe();
+
+    // 3. Cashier
     tokio::spawn(async move {
-        println!("💳 Cashier (Settlement) Engine Started!");
-
-        // 3. Stand at the end of the Trade Belt and wait for burgers!
-        while let Some(trade) = trade_rx.recv().await {
-            println!("Cashier received trade: {:?}", trade);
-
-            // 4. Calculate the total cash value (10 apples * $50,000 = $500,000)
-            let total_usd_value = trade.qty * trade.price;
-            // 5. Run the ACID transaction!
-            // We will hardcode "BTC" and "USD" just for the MVP.
-            let settlement_result = settle_trade(
-                &db_pool_for_cashier,
-                trade.maker_user_id,
-                trade.taker_user_id,
-                "BTC",
-                "USD",
-                trade.qty,
-                total_usd_value,
-            )
-            .await;
-            match settlement_result {
-                Ok(_) => println!("✅ Trade perfectly settled in Postgres!"),
-                Err(e) => println!("❌ FATAL DATABASE ERROR: {:?}", e),
+        loop {
+            match cashier_rx.recv().await {
+                Ok(trade) => {
+                    println!("the trade come in the candle_engine {:?}", trade)
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    eprintln!("Cashier lagged {n}");
+                }
             }
         }
     });
 
+    // 4. Candle Engine
+    tokio::spawn(async move {
+        let mut candle_engine = CandleEngine::new();
+        candle_engine.run(candle_rx).await;
+    });
     HttpServer::new(move || {
         App::new()
             .app_data(data.clone())

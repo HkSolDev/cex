@@ -11,5 +11,5 @@ engine = {workspace = true}
 db = {workspace = true}
 dotenvy = {workspace = true}
 sqlx = {workspace = true}
-
+market_data = {workspace = true}
 tokio = {workspace = true}
