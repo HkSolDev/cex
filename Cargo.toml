@@ -10,9 +10,11 @@ sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "postgres",
 dotenvy = "0.15.7"
 actix-web = "4.5"
 serde = {version = "1.0", features = ["derive"]}
+serde_json = { version = "1.0", features = ["alloc"] }
 thiserror="1.0"
 domain= {path = "crates/shared/domain"}
 db= {path = "crates/shared/db"}
 engine= {path = "crates/engine"}
 market_data = {path = "crates/market_data"}
 api = {path = "crates/api"}
+actix-ws = "0.3.0"

@@ -153,7 +153,7 @@ impl OrderBook {
                                     qty: trade_qty,
                                     timestamp: incoming_order.timestamp,
                                 };
-                                self.trade_sender.send(trade).ok(); //waht
+                                self.trade_sender.send(trade).ok();
 
                                 incoming_order.filled_qty.0 += trade_qty;
                                 counterparty.filled_qty.0 += trade_qty;
@@ -231,11 +231,11 @@ mod tests {
 
     #[test]
     fn test_orderbook_sorting() {
-        let (tx, _rx) = tokio::sync::mpsc::channel(100);
+        let (tx, _rx) = tokio::sync::broadcast::channel(100);
 
         let mut book = OrderBook::new(tx);
 
-        // We add orders OUT OF ORDER maliciously!
+        // We add orders OUT OF ORDER
         book.add_order(create_buy_order(1, 50_000)); // Alice buys at 50k
         book.add_order(create_buy_order(2, 49_000)); // Charlie buys at 49k
         book.add_order(create_buy_order(3, 51_000)); // Bob buys at 51k

@@ -1,16 +1,16 @@
 use domain::{Candle, Trade};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use tokio::sync::broadcast;
 
 pub struct CandleEngine {
     /// Key: (Symbol Bytes, Minute Unix Timestamp)
-    pub candles: HashMap<([u8; 8], i64), Candle>,
+    pub candles:BTreeMap<([u8; 8], i64), Candle>,
 }
 
 impl CandleEngine {
     pub fn new() -> Self {
         Self {
-            candles: HashMap::new(),
+            candles: BTreeMap::new(),
         }
     }
 

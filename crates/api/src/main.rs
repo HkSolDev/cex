@@ -1,5 +1,5 @@
 use actix_web::{
-    App, HttpResponse, HttpServer, Responder, delete, error::ErrorInternalServerError, get, post,
+    App, HttpRequest,HttpResponse, HttpServer, Responder, delete,Error, get, post,
     rt::task::yield_now, web,
 };
 use db::{create_connection_pool, delete_order, get_orders, lock_funds, settle_trade};
@@ -8,13 +8,14 @@ use dotenvy;
 use engine::{MatchingEngine, orderbook::OrderBook};
 use market_data::CandleEngine;
 use serde::{Deserialize, Serialize};
+use serde_json::Result;
 use sqlx::PgPool;
 use std::time::{SystemTime, UNIX_EPOCH}; //do not know why its use
 use tokio::{
     net::unix::pipe::Sender,
     sync::{broadcast, mpsc},
 };
-
+use candle_engine::CandleEngine;
 fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -77,6 +78,7 @@ async fn create_order(
                     if let Err(e) = sender.send(order.clone()).await {
                         println!("Failed to send to Engine: {}", e);
                     }
+                    
                     HttpResponse::Ok().json("Order created and funds locked!")
                 }
                 Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
@@ -105,6 +107,29 @@ async fn delete_order_id(
         Err(e) => Err(actix_web::error::ErrorInternalServerError(e)),
     }
 }
+
+#[get("/ws/market")]
+async fn ws_market_feed(
+    ws_data: web::Data<broadcast::Sender<Trade>>, //access the data here in this endpoint
+    req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
+//This will help to transfrom the noraml http session to WebSocket
+    let (res, mut session, mut msg_stream) = actix_ws::handle(&req, stream)?;
+
+    let _ = session.text("Welcome to the Market Feed!".to_string()).await; //the let _ tell the rust just keep going and ignore the error as in the return type i am 
+    let trade_tx = ws_data.get_ref();
+    let mut candle_rx = trade_tx.subscribe(); 
+
+actix_web::rt::spawn(async move {
+    while let Ok(trade) = candle_rx.recv().await {
+        let trade = serde_json::to_string(&trade).unwrap();
+         if session.text(trade).await.is_err() {
+            break; // If the push fails (browser closed), kill this background task!
+        }
+    }
+});
+
+Ok(res)
+    }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -138,11 +163,7 @@ async fn main() -> std::io::Result<()> {
 
                
            
-        //    match trade {
-            //Ok(trade) =>  
-           
-        //     (_) => println!("Error in receiveing the trade form the channel orderbook to matchingEngine"),
-        //    }
+
           
             // 3. Print the Best Bid/Ask so you can see the market moving!
             println!(
@@ -154,9 +175,8 @@ async fn main() -> std::io::Result<()> {
     });
 
     let sender_data = web::Data::new(tx);
-    // 1. Give the Cashier their own set of keys to the DB!
-    let db_pool_for_cashier = db_pool.clone();
 
+    let ws_data = web::Data::new(trade_tx.clone()); //I think we calone the broadcast channel here
     
     // 2. Each consumer subscribes
     let mut cashier_rx = trade_tx.clone().subscribe(); //why it need let mut cashier_rx = trade_tx.subscribe();
@@ -169,7 +189,7 @@ async fn main() -> std::io::Result<()> {
         loop {
             match cashier_rx.recv().await { //here we receive the trade
                 Ok(trade) => {
-                    println!("the trade come in the candle_engine {:?}", trade)
+                    println!("the trade come in the candle_engine {:?}", trade);
                 }
                 Err(broadcast::error::RecvError::Closed) => break,
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -188,6 +208,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(data.clone())
             .app_data(sender_data.clone()) // clone the sender data so each thread have axess to that
+         .app_data(ws_data) // pass the data 
             .service(health_checker)
             .service(create_order)
             .service(get_orders_handler)
