@@ -9,9 +9,9 @@ serde = {workspace = true}
 serde_json = {workspace = true}
 domain = {workspace = true}
 engine = {workspace = true}
+market_data = {workspace = true}
 db = {workspace = true}
 dotenvy = {workspace = true}
 sqlx = {workspace = true}
-market_data = {workspace = true}
 tokio = {workspace = true}
 actix-ws = {workspace = true}

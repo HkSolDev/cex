@@ -4,7 +4,7 @@ use tokio::sync::broadcast;
 
 pub struct CandleEngine {
     /// Key: (Symbol Bytes, Minute Unix Timestamp)
-    pub candles:BTreeMap<([u8; 8], i64), Candle>,
+    pub candles: BTreeMap<([u8; 8], i64), Candle>,
 }
 
 impl CandleEngine {
@@ -29,7 +29,7 @@ impl CandleEngine {
                         .entry((trade.symbol, minute_start))
                         .or_insert(Candle::new(&trade, minute_start));
 
-                    // Update it with the latest price/qty what it mean the update at the end of the minute  sovel the doubt 
+                    // Update it with the latest price/qty what it mean the update at the end of the minute  sovel the doubt
                     candle.update(&trade);
 
                     println!("Updated Candle: {:?}", candle);

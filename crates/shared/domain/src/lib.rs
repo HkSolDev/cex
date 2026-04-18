@@ -159,13 +159,12 @@ impl Candle {
         self.volume += trade.qty;
         self.total_quote_qty += trade.price * trade.qty;
     }
-    
+
     // Volume Weighted Average Price = Total Money Exchanged / Total Amount of Asset
     pub fn vwap(&self) -> i64 {
         self.total_quote_qty / self.volume
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppError {

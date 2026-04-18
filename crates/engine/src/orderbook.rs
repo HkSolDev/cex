@@ -1,4 +1,3 @@
-
 use domain::{Order, Price, Trade};
 use std::collections::{BTreeMap, VecDeque};
 use tokio::sync::{broadcast, mpsc};
@@ -10,7 +9,7 @@ pub struct OrderBook {
     // Value = A line (VecDeque) of Orders sitting at that exact price!
     pub bids: BTreeMap<Price, VecDeque<Order>>, // Buy orders
     pub asks: BTreeMap<Price, VecDeque<Order>>, // Sell orders
-    pub trade_sender: broadcast::Sender<Trade>,      //The start of second belt
+    pub trade_sender: broadcast::Sender<Trade>, //The start of second belt
 }
 
 impl OrderBook {
@@ -98,9 +97,8 @@ impl OrderBook {
                                     qty: trade_qty,
                                     timestamp: incoming_order.timestamp,
                                 };
-                                self.trade_sender.send(trade).ok(); 
+                                self.trade_sender.send(trade).ok();
 
-                                
                                 // 4. If Bob (the counterparty) still wants more, put him back in front of the line!
                                 if counterparty.qty.0 > counterparty.filled_qty.0 {
                                     line.push_front(counterparty);

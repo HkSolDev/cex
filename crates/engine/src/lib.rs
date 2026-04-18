@@ -39,7 +39,8 @@ impl MatchingEngine {
     pub async fn run(mut self) {
         println!("Matching Engine started... waiting for orders in the pipeline.");
 
-        while let Some(order) = self.rx.recv().await { //here we receive the ordern\
+        while let Some(order) = self.rx.recv().await {
+            //here we receive the ordern\
             println!("Received order: {:?}", order);
             let dummy_trade = Trade {
                 maker_user_id: 101, // Some random guy waiting in the orderbook
@@ -53,8 +54,6 @@ impl MatchingEngine {
             // Now shout it out of the megaphone!
             // We use .ok() to silently ignore the error if no one is listening right now.
             self.trade_tx.send(dummy_trade).ok(); // we are sending from here the trade rihgt 
-
-                            
         }
     }
 }
@@ -65,7 +64,6 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-
 
     #[tokio::test]
     pub async fn test_order_intake_pipeline() {
